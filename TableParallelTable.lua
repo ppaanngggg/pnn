@@ -7,27 +7,29 @@
 
 local TableParallelTable, parent = torch.class('nn.TableParallelTable', 'nn.Container')
 
+require 'pnn.BatchTable'
 local threads = require 'threads'
 
 function TableParallelTable:__init(module, gpuTable)
 	parent.__init(self)
 
-	self.module = (not torch.isTypeOf(rnn, 'nn.Sequencer')) and nn.Sequencer(module) or module
+	self.module = (not torch.isTypeOf(rnn, 'nn.BatchTable')) and nn.BatchTable(module) or module
 	self.module:float()
-	local tmpModule = self.module
 	self.modules[1] = self.module
 
 	self.gpuTable = gpuTable
+
+	local tmpModule = self.module
 	self.pool = threads.Threads(
 		#gpuTable,
 		function(id)
 			require 'nn'
 			require 'rnn'
+			-- require 'pnn.Cycle'
+			-- require 'pnn.Slice'
+			require 'pnn.init'
 			-- require 'cutorch'
 			-- require 'cunn'
-			require 'Cycle'
-			require 'Slice'
-			require 'SliceTable'
 			-- cutorch.setDevice(gpuTable[id])
 		end,
 		function(id)

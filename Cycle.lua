@@ -73,7 +73,7 @@ function Cycle:updateGradInput(input, gradOutput)
             self.gradInput = self.module:updateGradInput(self.output[step - 1], self._gradOutputs[step])
         end
     end
-    self.gradInput = {self.gradInput, torch.LongTensor{0}}
+    self.gradInput = {self.gradInput, torch.Tensor{0}:typeAs(input[2])}
     return self.gradInput
 end
 
