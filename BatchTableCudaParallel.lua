@@ -12,7 +12,6 @@ function BatchTableCudaParallel:__init(module, gpuTable)
 	parent.__init(self)
 
 	self.module = (not torch.isTypeOf(rnn, 'nn.BatchTable')) and nn.BatchTable(module) or module
-	self.module:double()
 	self.modules[1] = self.module
 
 	self.gpuTable = gpuTable
@@ -24,34 +23,12 @@ function BatchTableCudaParallel:__init(module, gpuTable)
 			require 'nn'
 			require 'rnn'
 			require 'pnn.init'
-			-- require 'cutorch'
-			-- require 'cunn'
-			-- cutorch.setDevice(gpuTable[id])
+			require 'cutorch'
+			require 'cunn'
+			cutorch.setDevice(gpuTable[id])
 		end,
 		function(id)
-			-- function toCuda(input)
-			-- 	if torch.type(input) == 'table' then
-			-- 		local ret = {}
-			-- 		for k,v in ipairs(input) do
-			-- 			ret[k] = toCuda(v)
-			-- 		end
-			-- 		return ret
-			-- 	else
-			-- 		return input:cuda()
-			-- 	end
-			-- end
-			function toDouble(input)
-				if torch.type(input) == 'table' then
-					local ret = {}
-					for k,v in ipairs(input) do
-						ret[k] = toDouble(v)
-					end
-					return ret
-				else
-					return input:double()
-				end
-			end
-			tModule = tmpModule:clone()--:cuda()
+			tModule = tmpModule:clone():cuda()
 		end
 	)
 	self.pool:specific(true)
@@ -102,11 +79,9 @@ function BatchTableCudaParallel:updateOutput(input)
 		self.pool:addjob(
 			i,
 			function(tInput)
-				-- print(cutorch.getDevice())
-				-- local _input = toCuda(input[i])
-				tInput = toDouble(tInput)
+				local tInput = pnn.recursiveCuda(tInput)
 				local tOutput = tModule:forward(tInput)
-				return toDouble(tOutput)
+				return pnn.recursiveDouble(tOutput)
 			end,
 			function(tOutput)
 				outputTable[i] = tOutput
@@ -127,10 +102,10 @@ function BatchTableCudaParallel:updateGradInput(input, gradOutput)
 		self.pool:addjob(
 			i,
 			function(tInput, tGradOutput)
-				tInput = toDouble(tInput)
-				tGradOutput = toDouble(tGradOutput)
+				local tInput = pnn.recursiveCuda(tInput)
+				local tGradOutput = pnn.recursiveCuda(tGradOutput)
 				local tGradInput = tModule:updateGradInput(tInput, tGradOutput)
-				return toDouble(tGradInput)
+				return pnn.recursiveDouble(tGradInput)
 			end,
 			function(tGradInput)
 				gradInputTable[i] = tGradInput
@@ -152,11 +127,11 @@ function BatchTableCudaParallel:accGradParameters(input, gradOutput, scale)
 		self.pool:addjob(
 			i,
 			function(tInput, tGradOutput)
-				tInput = toDouble(tInput)
-				tGradOutput = toDouble(tGradOutput)
-				tModule:accGradParameters(tInput, tGradOutput)
-				tParameters, tGradParameters = tModule:parameters()
-				return toDouble(tGradParameters)
+				local tInput = pnn.recursiveCuda(tInput)
+				local tGradOutput = pnn.recursiveCuda(tGradOutput)
+				tModule:accGradParameters(tInput, tGradOutput, scale)
+				local tParameters, tGradParameters = tModule:parameters()
+				return pnn.recursiveDouble(tGradParameters)
 			end,
 			function(tGradParameters)
 				gradParametersTable[i] = tGradParameters

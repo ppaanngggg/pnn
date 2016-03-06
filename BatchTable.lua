@@ -5,6 +5,7 @@ function BatchTable:__init(module)
 
     self.module = module
     self.modules[1] = self.module
+    self.sharedModules = {}
 end
 
 function BatchTable:add(module)
@@ -14,10 +15,9 @@ end
 function BatchTable:updateOutput(input)
     assert(torch.type(input) == 'table', "input should be table")
     self.output = {}
-    self.sharedModules = {}
     param, gradParam = self.module:parameters()
     for i = 1,#input do
-        self.sharedModules[i] = self.module:clone('weight', 'bias', 'gradWeight', 'gradBias')
+        self.sharedModules[i] = self.sharedModules[i] or self.module:clone('weight', 'bias', 'gradWeight', 'gradBias')
         self.output[i] = self.sharedModules[i]:forward(input[i])
     end
     return self.output
