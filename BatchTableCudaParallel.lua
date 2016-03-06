@@ -1,20 +1,18 @@
 --[[
-	This file implements table parallelism for Torch modules.
-
-	The same model is replicated on multiple GPUs. The input is split, typeically
-	into smaller mini-batch.
+	This file implements cuda parallelism for BatchTable.
+	It split a bigger batch into smaller batch for each GPU.
 ]]--
 
-local TableParallelTable, parent = torch.class('nn.TableParallelTable', 'nn.Container')
+local BatchTableCudaParallel, parent = torch.class('nn.BatchTableCudaParallel', 'nn.Container')
 
 require 'pnn.BatchTable'
 local threads = require 'threads'
 
-function TableParallelTable:__init(module, gpuTable)
+function BatchTableCudaParallel:__init(module, gpuTable)
 	parent.__init(self)
 
 	self.module = (not torch.isTypeOf(rnn, 'nn.BatchTable')) and nn.BatchTable(module) or module
-	self.module:float()
+	self.module:double()
 	self.modules[1] = self.module
 
 	self.gpuTable = gpuTable
@@ -25,8 +23,6 @@ function TableParallelTable:__init(module, gpuTable)
 		function(id)
 			require 'nn'
 			require 'rnn'
-			-- require 'pnn.Cycle'
-			-- require 'pnn.Slice'
 			require 'pnn.init'
 			-- require 'cutorch'
 			-- require 'cunn'
@@ -44,15 +40,15 @@ function TableParallelTable:__init(module, gpuTable)
 			-- 		return input:cuda()
 			-- 	end
 			-- end
-			function toFloat(input)
+			function toDouble(input)
 				if torch.type(input) == 'table' then
 					local ret = {}
 					for k,v in ipairs(input) do
-						ret[k] = toFloat(v)
+						ret[k] = toDouble(v)
 					end
 					return ret
 				else
-					return input:float()
+					return input:double()
 				end
 			end
 			tModule = tmpModule:clone()--:cuda()
@@ -61,7 +57,12 @@ function TableParallelTable:__init(module, gpuTable)
 	self.pool:specific(true)
 end
 
-function TableParallelTable:split(input)
+function BatchTableCudaParallel:add(module)
+    assert(true, "BatchTableCudaParallel can't add module")
+end
+
+
+function BatchTableCudaParallel:split(input)
 	local inputTable = {}
 	local batchSize = #input / #self.gpuTable
 	local nBigBatch = #input % #self.gpuTable
@@ -82,7 +83,7 @@ function TableParallelTable:split(input)
 	return inputTable
 end
 
-function TableParallelTable:merge(outputTable)
+function BatchTableCudaParallel:merge(outputTable)
 	local output = {}
 	index = 1
 	for i =1,#outputTable do
@@ -94,7 +95,7 @@ function TableParallelTable:merge(outputTable)
 	return output
 end
 
-function TableParallelTable:updateOutput(input)
+function BatchTableCudaParallel:updateOutput(input)
 	local inputTable = self:split(input)
 	local outputTable = {}
 	for i = 1,#self.gpuTable do
@@ -103,9 +104,9 @@ function TableParallelTable:updateOutput(input)
 			function(tInput)
 				-- print(cutorch.getDevice())
 				-- local _input = toCuda(input[i])
-				tInput = toFloat(tInput)
+				tInput = toDouble(tInput)
 				local tOutput = tModule:forward(tInput)
-				return toFloat(tOutput)
+				return toDouble(tOutput)
 			end,
 			function(tOutput)
 				outputTable[i] = tOutput
@@ -118,7 +119,7 @@ function TableParallelTable:updateOutput(input)
 	return self.output
 end
 
-function TableParallelTable:updateGradInput(input, gradOutput)
+function BatchTableCudaParallel:updateGradInput(input, gradOutput)
 	local inputTable = self:split(input)
 	local gradOutputTable = self:split(gradOutput)
 	local gradInputTable = {}
@@ -126,10 +127,10 @@ function TableParallelTable:updateGradInput(input, gradOutput)
 		self.pool:addjob(
 			i,
 			function(tInput, tGradOutput)
-				tInput = toFloat(tInput)
-				tGradOutput = toFloat(tGradOutput)
+				tInput = toDouble(tInput)
+				tGradOutput = toDouble(tGradOutput)
 				local tGradInput = tModule:updateGradInput(tInput, tGradOutput)
-				return toFloat(tGradInput)
+				return toDouble(tGradInput)
 			end,
 			function(tGradInput)
 				gradInputTable[i] = tGradInput
@@ -143,7 +144,7 @@ function TableParallelTable:updateGradInput(input, gradOutput)
 	return self.gradInput
 end
 
-function TableParallelTable:accGradParameters(input, gradOutput, scale)
+function BatchTableCudaParallel:accGradParameters(input, gradOutput, scale)
 	local inputTable = self:split(input)
 	local gradOutputTable = self:split(gradOutput)
 	local gradParametersTable = {}
@@ -151,11 +152,11 @@ function TableParallelTable:accGradParameters(input, gradOutput, scale)
 		self.pool:addjob(
 			i,
 			function(tInput, tGradOutput)
-				tInput = toFloat(tInput)
-				tGradOutput = toFloat(tGradOutput)
+				tInput = toDouble(tInput)
+				tGradOutput = toDouble(tGradOutput)
 				tModule:accGradParameters(tInput, tGradOutput)
 				tParameters, tGradParameters = tModule:parameters()
-				return toFloat(tGradParameters)
+				return toDouble(tGradParameters)
 			end,
 			function(tGradParameters)
 				gradParametersTable[i] = tGradParameters
@@ -173,7 +174,7 @@ function TableParallelTable:accGradParameters(input, gradOutput, scale)
 	end
 end
 
-function TableParallelTable:updateParameters(learningRate)
+function BatchTableCudaParallel:updateParameters(learningRate)
 	parent.updateParameters(self, learningRate)
 	local parameters = self.module:parameters()
 	for i = 1,#self.gpuTable do
@@ -192,7 +193,7 @@ function TableParallelTable:updateParameters(learningRate)
 	self.pool:synchronize()
 end
 
-function TableParallelTable:zeroGradParameters()
+function BatchTableCudaParallel:zeroGradParameters()
 	parent.zeroGradParameters(self)
 	for i = 1,#self.gpuTable do
 		self.pool:addjob(
@@ -205,7 +206,7 @@ function TableParallelTable:zeroGradParameters()
 	self.pool:synchronize()
 end
 
-function TableParallelTable:training()
+function BatchTableCudaParallel:training()
 	parent.training(self)
 	for i = 1,#self.gpuTable do
 		self.pool:addjob(
@@ -218,7 +219,7 @@ function TableParallelTable:training()
 	self.pool:synchronize()
 end
 
-function TableParallelTable:evaluate()
+function BatchTableCudaParallel:evaluate()
 	parent.evaluate(self)
 	for i = 1,#self.gpuTable do
 		self.pool:addjob(
@@ -231,7 +232,7 @@ function TableParallelTable:evaluate()
 	self.pool:synchronize()
 end
 
-function TableParallelTable:reset()
+function BatchTableCudaParallel:reset()
 	parent.reset(self)
 	for i = 1,#self.gpuTable do
 		self.pool:addjob(
@@ -243,3 +244,5 @@ function TableParallelTable:reset()
 	end
 	self.pool:synchronize()
 end
+
+BatchTableCudaParallel.accUpdateGradParameters = BatchTableCudaParallel.sharedAccUpdateGradParameters
