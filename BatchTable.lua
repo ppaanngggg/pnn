@@ -42,11 +42,3 @@ function BatchTable:accGradParameters(input, gradOutput, scale)
 end
 
 BatchTable.accUpdateGradParameters = BatchTable.sharedAccUpdateGradParameters
-
--- function BatchTable:accUpdateGradParameters(input, gradOutput, lr)
---     assert(torch.type(input) == 'table', "input should be table")
---     assert(torch.type(gradOutput) == 'table', "gradOutput should be table")
---     for i = 1,#input do
---         self.sharedModules[i]:accUpdateGradParameters(input[i], gradOutput[i], lr)
---     end
--- end

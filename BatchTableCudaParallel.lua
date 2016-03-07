@@ -16,6 +16,7 @@ function BatchTableCudaParallel:__init(module, gpuTable)
 
 	self.gpuTable = gpuTable
 
+
 	local tmpModule = self.module
 	self.pool = threads.Threads(
 		#gpuTable,
@@ -26,12 +27,29 @@ function BatchTableCudaParallel:__init(module, gpuTable)
 			require 'cutorch'
 			require 'cunn'
 			cutorch.setDevice(gpuTable[id])
+			print('id:',id,'on',cutorch.getDevice())
 		end,
 		function(id)
 			tModule = tmpModule:clone():cuda()
 		end
 	)
 	self.pool:specific(true)
+
+	-- local tmpThreadModules = {}
+	-- for i = 1,#self.gpuTable do
+	-- 	self.pool:addjob(
+	-- 		i,
+	-- 		function()
+	-- 			print(i, tModule:parameters()[1]:getDevice())
+	-- 			return tModule
+	-- 		end,
+	-- 		function(tModule)
+	-- 			tmpThreadModules[i] = tModule
+	-- 		end
+	-- 	)
+	-- end
+	-- self.pool:synchronize()
+	-- self.threadModules = tmpThreadModules
 end
 
 function BatchTableCudaParallel:add(module)
@@ -79,9 +97,17 @@ function BatchTableCudaParallel:updateOutput(input)
 		self.pool:addjob(
 			i,
 			function(tInput)
+				local begin_time = torch.tic()
 				local tInput = pnn.recursiveCuda(tInput)
+				local toCuda_time = torch.tic()
 				local tOutput = tModule:forward(tInput)
-				return pnn.recursiveDouble(tOutput)
+				local forward_time = torch.tic()
+				local ret = pnn.recursiveDouble(tOutput)
+				local toDouble_time = torch.tic()
+				print(i, toCuda_time - begin_time)
+				print(i, forward_time - toCuda_time)
+				print(i, toDouble_time - forward_time)
+				return ret
 			end,
 			function(tOutput)
 				outputTable[i] = tOutput

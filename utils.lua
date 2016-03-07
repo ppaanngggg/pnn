@@ -5,8 +5,10 @@ function pnn.recursiveCuda(input)
             ret[k] = pnn.recursiveCuda(v)
         end
         return ret
-    else
+    elseif torch.isTensor(input) then
         return input:cuda()
+    else
+        return input
     end
 end
 
@@ -17,8 +19,10 @@ function pnn.recursiveDouble(input)
             ret[k] = pnn.recursiveDouble(v)
         end
         return ret
-    else
+    elseif torch.isTensor(input) then
         return input:double()
+    else
+        return input
     end
 end
 

@@ -21,3 +21,7 @@ end
 function BatchTableCriterion:updateGradInput(input, target)
     return self.gradInput
 end
+
+function BatchTableCriterion:cuda()
+   return self.criterion:type('torch.CudaTensor')
+end
