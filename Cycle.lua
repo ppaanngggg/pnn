@@ -2,9 +2,14 @@ local Cycle, parent = torch.class('nn.Cycle', 'nn.Container')
 
 function Cycle:__init(module)
     parent.__init(self)
+
     self.module = module
     self.modules[1] = self.module
     self.sharedModules = {}
+end
+
+function Cycle:add(module)
+    assert(true, "Cycle can't add module")
 end
 
 function Cycle:updateOutput(input)
@@ -32,4 +37,61 @@ function Cycle:updateOutput(input)
     return self.output
 end
 
-function 
+function Cycle:updateGradInput(input, gradOutput)
+    -- input is {real_input, rho}
+    assert(torch.type(input) == 'table', "expecting input table")
+    local realInput = input[1]
+    assert(#gradOutput == self.rho, "#gradOutput must be equal with rho")
+
+    self._combinedGradInput = {}
+    for i = self.rho,1,-1 do
+        if i == self.rho then
+            self._combinedGradInput[self.rho] =
+                self.sharedModules[self.rho]:updateGradInput(
+                    self.output[self.rho - 1],
+                    gradOutput[self.rho]
+                )
+        else
+            self._combinedGradInput[i + 1]:add(gradOutput[i])
+            if i == 1 then
+                self._combinedGradInput[i] =
+                    self.sharedModules[i]:updateGradInput(
+                        realInput,
+                        self._combinedGradInput[i + 1]
+                    )
+            else
+                self._combinedGradInput[i] =
+                    self.sharedModules[i]:updateGradInput(
+                        self.output[i - 1],
+                        self._combinedGradInput[i + 1]
+                    )
+            end
+        end
+    end
+    self.gradInput = {self._combinedGradInput[1], torch.Tensor(1):typeAs(input[2])}
+    return self.gradInput
+end
+
+function Cycle:accGradParameters(input, gradOutput, scale)
+    -- input is {real_input, rho}
+    assert(torch.type(input) == 'table', "expecting input table")
+    local realInput = input[1]
+    assert(#gradOutput == self.rho, "#gradOutput must be equal with rho")
+    for i = self.rho,1,-1 do
+        if i == self.rho then
+            self.sharedModules[self.rho]:accGradParameters(
+                self.output[self.rho - 1], gradOutput[self.rho], scale
+            )
+        elseif i == 1 then
+            self.sharedModules[i]:accGradParameters(
+                realInput, self._combinedGradInput[i + 1], scale
+            )
+        else
+            self.sharedModules[i]:accGradParameters(
+                self.output[i - 1], self._combinedGradInput[i + 1], scale
+            )
+        end
+    end
+end
+
+Cycle.accUpdateGradParameters = Cycle.sharedAccUpdateGradParameters
