@@ -93,6 +93,8 @@ function MultiGPUTrainer:train(dataset, loopTime)
 	local subLoopTime = #dataset / #self.gpuTable
 	local lastSubLoopSize = #dataset % #self.gpuTable
 
+	print('begin training')
+	print('loop', 'err', 'time')
 	for i = 1,loopTime do
 		local begin_time = torch.tic()
 		local totalFx = {}
@@ -132,7 +134,7 @@ function MultiGPUTrainer:train(dataset, loopTime)
 		if lastSubLoopSize > 0 then
 			totalLoopTime = totalLoopTime + 1
 		end
-		for fx_idx = 1,#fx do
+		for fx_idx = 1,#totalFx do
 			totalFx[fx_idx] = totalFx[fx_idx] / totalLoopTime
 		end
 
