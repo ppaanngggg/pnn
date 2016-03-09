@@ -29,6 +29,7 @@ function MultiGPUTrainer:__init(module, criterion, optim, optimParams, gpuTable)
 			require 'cutorch'
 			require 'cunn'
 			cutorch.setDevice(gpuTable[threadid])
+			cutorch.seed()
 			print('thread',threadid,'on',cutorch.getDevice())
 		end,
 		function(threadid)
@@ -94,7 +95,7 @@ function MultiGPUTrainer:train(dataset, loopTime)
 	local lastSubLoopSize = #dataset % #self.gpuTable
 
 	print('begin training')
-	print('loop', 'err', 'time')
+	print('loop', '|', 'err', '|', 'time')
 	for i = 1,loopTime do
 		local begin_time = torch.tic()
 		local totalFx = {}
@@ -139,5 +140,6 @@ function MultiGPUTrainer:train(dataset, loopTime)
 		end
 
 		print(i, totalFx[1], torch.tic() - begin_time)
+		torch.saveobj('model_'..i, self.module)
 	end
 end
