@@ -96,6 +96,7 @@ function MultiGPUTrainer:train(dataset, loopTime)
 
 	print('begin training')
 	print('loop', '|', 'err', '|', 'time')
+	local minFx = nil
 	for i = 1,loopTime do
 		local begin_time = torch.tic()
 		local totalFx = {}
@@ -140,6 +141,13 @@ function MultiGPUTrainer:train(dataset, loopTime)
 		end
 
 		print(i, totalFx[1], torch.tic() - begin_time)
-		torch.saveobj('model_'..i, self.module)
+		if minFx == nil then
+			minFx = totalFx
+		end
+		if totalFx[1] <= minFx[1] then
+			torch.saveobj('model', self.module)
+			minFx = totalFx
+		end
+
 	end
 end
