@@ -101,12 +101,14 @@ function MultiGPUTrainer:train(dataset, loopTime)
 		local begin_time = torch.tic()
 		local totalFx = {}
 		-- loop complete loop
+		local shuffledIndices = torch.randperm(#dataset, 'torch.LongTensor')
 		for j = 1,subLoopTime do
 			self.gpuDataIdx = {}
 			local baseIdx = (j - 1) * #self.gpuTable
 			for t = 1,#self.gpuTable do
-				self.gpuDataIdx[t] = baseIdx + t
+				self.gpuDataIdx[t] = shuffledIndices[baseIdx + t]
 			end
+			-- update parameters and count err
 			local _, fx = self.optim(feval, self.x, self.optimParams)
 			for fx_idx = 1,#fx do
 				if totalFx[fx_idx] == nil then
@@ -120,8 +122,9 @@ function MultiGPUTrainer:train(dataset, loopTime)
 		if lastSubLoopSize > 0 then
 			self.gpuDataIdx = {}
 			for t = 1,lastSubLoopSize do
-				self.gpuDataIdx[t] = #dataset - lastSubLoopSize + t
+				self.gpuDataIdx[t] = shuffledIndices[#dataset - lastSubLoopSize + t]
 			end
+			-- update parameters and count err
 			local _, fx = self.optim(feval, self.x, self.optimParams)
 			for fx_idx = 1,#fx do
 				if totalFx[fx_idx] == nil then
