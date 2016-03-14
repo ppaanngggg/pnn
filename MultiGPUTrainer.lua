@@ -134,7 +134,7 @@ function MultiGPUTrainer:train(dataset, batch_size, loopTime)
         local avg_f = total_f / num_f
         if best_f == nil or avg_f < best_f then
             best_f = avg_f
-            torch.saveobj('nobatch_model', self.module)
+            torch.saveobj('model', self.module)
         end
         print(loop, avg_f, torch.tic() - begin_time)
 	end
