@@ -5,7 +5,6 @@
 
 local MultiGPUTrainer = torch.class('nn.MultiGPUTrainer')
 
-require 'nn'
 require 'cutorch'
 require 'cunn'
 
