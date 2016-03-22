@@ -44,9 +44,8 @@ function Rnn:updateGradInput(input, gradOutput)
     assert(torch.type(input) == 'table', "expecting input table")
     assert(#gradOutput == self.rho, "#gradOutput must be equal with rho")
 
-    self.lastGradOutput = torch.Tensor(gradOutput[self.rho]:size()):copy(gradOutput[self.rho])
+    self.lastGradOutput = gradOutput[self.rho]:clone()
     if self.isContinue and self._combinedGrad then
-        print("logging")
         self.lastGradOutput:add(self._combinedGrad[1])
     end
 
